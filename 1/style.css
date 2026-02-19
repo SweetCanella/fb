@@ -1,0 +1,29 @@
+.card {
+  padding: 16px;
+  border: 1px solid #ddd;
+  width: 250px;
+}
+.card__image {
+  width: 100%;
+  height: auto;
+}
+.card__title {
+  font-size: 24px;
+  color: #3498db;
+}
+.card__description {
+  font-size: 16px;
+  color: #666;
+}
+.card__button {
+  display: inline-block;
+  padding: 8px 16px;
+  background: #3498db;
+  color: white;
+  text-decoration: none;
+  -webkit-transform: rotate(0deg);
+  -ms-transform: rotate(0deg);
+  transform: rotate(0deg);
+}
+
+/*# sourceMappingURL=style.css.map */
