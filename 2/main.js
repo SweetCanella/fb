@@ -23,6 +23,7 @@ app.get('/', (req, res) => {
     res.send('Главная страница');
 });
 
+//создание товара
 app.post('/products', (req, res) => {
     const { name, price } = req.body;
     
@@ -40,6 +41,7 @@ app.get('/products', (req, res) => {
     res.json(products);
 });
 
+//просмотр одного товара
 app.get('/products/:id', (req, res) => {
     const product = products.find(p => p.id == req.params.id);
     
@@ -50,6 +52,7 @@ app.get('/products/:id', (req, res) => {
     res.json(product);
 });
 
+//обновление товара
 app.patch('/products/:id', (req, res) => {
     const product = products.find(p => p.id == req.params.id);
     
@@ -65,6 +68,7 @@ app.patch('/products/:id', (req, res) => {
     res.json(product);
 });
 
+//удаление товара
 app.delete('/products/:id', (req, res) => {
     const productExists = products.some(p => p.id == req.params.id);
     

@@ -1,4 +1,4 @@
-$primary-color: #3498db;
+$primary-color: #3498db; //переменные для цвета и размеша шрифта
 $font-size: 16px;
 
 @mixin transform($property) {
@@ -7,6 +7,7 @@ $font-size: 16px;
     transform: $property;
 }
 
+//карточка
 .card {
     padding: 16px;
     border: 1px solid #ddd;
@@ -34,6 +35,7 @@ $font-size: 16px;
         color: white;
         text-decoration: none;
         
+        //используем миксин
         @include transform(rotate(0deg));
     }
 }
