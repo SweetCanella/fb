@@ -1,0 +1,16 @@
+{
+    "name": "notes-pwa",
+    "version": "1.0.0",
+    "description": "PWA Notes App with WebSocket and Push",
+    "main": "server.js",
+    "scripts": {
+        "start": "node server.js"
+    },
+    "dependencies": {
+        "body-parser": "^2.2.2",
+        "cors": "^2.8.6",
+        "express": "^5.2.1",
+        "socket.io": "^4.8.3",
+        "web-push": "^3.6.7"
+    }
+}
