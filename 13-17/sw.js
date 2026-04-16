@@ -39,6 +39,7 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
     const url = new URL(event.request.url);
     if (url.origin !== self.location.origin) return;
+    if (event.request.method !== 'GET') return;
     
     event.respondWith(
         fetch(event.request)
@@ -56,7 +57,15 @@ self.addEventListener('fetch', event => {
 });
 
 self.addEventListener('push', (event) => {
-    let data = { title: 'Новое уведомление', body: '' };
+    console.log('[SW] Получено push-сообщение');
+    
+    let data = {
+        title: 'Новое уведомление',
+        body: '',
+        reminderId: null,
+        reminderText: null
+    };
+    
     if (event.data) {
         try {
             data = event.data.json();
@@ -64,19 +73,60 @@ self.addEventListener('push', (event) => {
             data.body = event.data.text();
         }
     }
+    
     const options = {
         body: data.body,
         icon: '/icons/icon-152x152.png',
-        badge: '/icons/icon-48x48.png'
+        badge: '/icons/icon-48x48.png',
+        vibrate: [200, 100, 200],
+        data: {
+            reminderId: data.reminderId,
+            reminderText: data.reminderText,
+            url: '/'
+        }
     };
+    
+    if (data.reminderId) {
+        options.actions = [
+            {
+                action: 'snooze',
+                title: 'Отложить на 5 минут'
+            }
+        ];
+    }
+    
     event.waitUntil(
         self.registration.showNotification(data.title, options)
     );
 });
 
 self.addEventListener('notificationclick', (event) => {
-    event.notification.close();
-    event.waitUntil(
-        clients.openWindow('/')
-    );
+    const notification = event.notification;
+    const action = event.action;
+    
+    if (action === 'snooze') {
+        const reminderId = notification.data.reminderId;
+        const reminderText = notification.data.reminderText;
+        
+        console.log('[SW] Откладывание напоминания', reminderId);
+        
+        event.waitUntil(
+            clients.matchAll({ type: 'window', includeUncontrolled: true })
+                .then(clientsList => {
+                    if (clientsList.length > 0) {
+                        clientsList[0].postMessage({
+                            type: 'SNOOZE_REMINDER',
+                            reminderId: reminderId,
+                            reminderText: reminderText
+                        });
+                    }
+                    notification.close();
+                })
+        );
+    } else {
+        notification.close();
+        event.waitUntil(
+            clients.openWindow('/')
+        );
+    }
 });

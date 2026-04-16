@@ -38,11 +38,23 @@ function loadHomePage() {
     currentPage = 'home';
     contentDiv.innerHTML = `
         <div class="home-content">
-            <form id="note-form" class="row is-center">
-                <input class="col-9" type="text" id="note-input" placeholder="Введите текст заметки" required>
-                <button class="col-3 button primary" type="submit">Добавить</button>
+            <h2 class="is-center">Добавить заметку</h2>
+            <form id="note-form" style="display: flex; flex-direction: column; gap: 1rem; max-width: 500px; margin: 0 auto;">
+                <input type="text" id="note-input" placeholder="Введите текст заметки" required style="padding: 8px;">
+                
+                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                    <input type="checkbox" id="enable-reminder-checkbox"> Добавить напоминание
+                </label>
+                
+                <div id="reminder-fields" style="display: none; gap: 0.5rem; flex-wrap: wrap;">
+                    <input type="datetime-local" id="reminder-time" style="flex: 1; padding: 8px;">
+                </div>
+                
+                <button type="submit" style="padding: 10px; background: #4285f4; color: white; border: none; border-radius: 5px; cursor: pointer;">Добавить заметку</button>
             </form>
-            <ul id="notes-list" style="list-style: none; padding-left: 0;"></ul>
+            
+            <h2 class="is-center" style="margin-top: 2rem;">Список заметок</h2>
+            <ul id="notes-list" style="list-style: none; padding-left: 0; max-width: 600px; margin: 0 auto;"></ul>
         </div>
     `;
     initNotes();
@@ -53,9 +65,9 @@ function loadAboutPage() {
     contentDiv.innerHTML = `
         <div class="about-content">
             <h2 class="is-center">О приложении</h2>
-            <p class="is-center"><strong>Версия:</strong> 1.0.0</p>
-            <p>Это приложение для заметок</p>
-            <p>Оно классное и многое умеет</p>
+            <p class="is-center"><strong>Версия:</strong> 2.0.0</p>
+            <p>Приложение для заметок с напоминаниями</p>
+            <p>Поддерживает push-уведомления и откладывание на 5 минут</p>
         </div>
     `;
 }
@@ -68,18 +80,30 @@ function loadNotes() {
         notesList.innerHTML = '<li class="is-center">Нет заметок. Добавьте первую!</li>';
         return;
     }
-    notesList.innerHTML = notes.map((note, index) => `
-        <li style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; padding: 0.5rem; background: #f5f5f5; border-radius: 8px;">
-            <span style="flex: 1;">${escapeHtml(note)}</span>
-            <button class="delete-btn" data-index="${index}" style="background: #dc3545; color: white; border: none; border-radius: 4px; padding: 0.25rem 0.75rem; cursor: pointer;">✕ Удалить</button>
-        </li>
-    `).join('');
+    notesList.innerHTML = notes.map((note, index) => {
+        let reminderInfo = '';
+        if (note.reminder) {
+            const reminderDate = new Date(note.reminder);
+            reminderInfo = '<br><small>Напоминание: ' + reminderDate.toLocaleString() + '</small>';
+        }
+        return `
+            <li style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; padding: 0.5rem; background: #f5f5f5; border-radius: 8px;">
+                <div style="flex: 1;">
+                    <strong>${escapeHtml(note.text)}</strong>
+                    ${reminderInfo}
+                    <br><small>Создано: ${note.datetime || 'не указано'}</small>
+                </div>
+                <button class="delete-btn" data-index="${index}" style="background: #dc3545; color: white; border: none; border-radius: 4px; padding: 0.25rem 0.75rem; cursor: pointer;">X Удалить</button>
+            </li>
+        `;
+    }).join('');
     document.querySelectorAll('.delete-btn').forEach(btn => {
         btn.addEventListener('click', () => deleteNote(parseInt(btn.dataset.index)));
     });
 }
 
 function escapeHtml(str) {
+    if (!str) return '';
     return str.replace(/[&<>]/g, function(m) {
         if (m === '&') return '&amp;';
         if (m === '<') return '&lt;';
@@ -90,7 +114,13 @@ function escapeHtml(str) {
 
 function addNote(text) {
     const notes = JSON.parse(localStorage.getItem('notes') || '[]');
-    notes.push(text);
+    const newNote = {
+        id: Date.now(),
+        text: text,
+        datetime: new Date().toLocaleString('ru-RU'),
+        reminder: null
+    };
+    notes.push(newNote);
     localStorage.setItem('notes', JSON.stringify(notes));
     loadNotes();
 
@@ -99,28 +129,85 @@ function addNote(text) {
     }
 }
 
+function addReminderNote(text, reminderTimestamp) {
+    const notes = JSON.parse(localStorage.getItem('notes') || '[]');
+    const newNote = {
+        id: Date.now(),
+        text: text,
+        datetime: new Date().toLocaleString('ru-RU'),
+        reminder: reminderTimestamp
+    };
+    notes.push(newNote);
+    localStorage.setItem('notes', JSON.stringify(notes));
+    loadNotes();
+
+    if (socket && socket.connected) {
+        socket.emit('newReminder', {
+            id: newNote.id,
+            text: text,
+            reminderTime: reminderTimestamp
+        });
+    }
+    showToast('Напоминание запланировано на ' + new Date(reminderTimestamp).toLocaleString());
+}
+
 function deleteNote(index) {
     const notes = JSON.parse(localStorage.getItem('notes') || '[]');
     if (index >= 0 && index < notes.length) {
+        const deletedNote = notes[index];
         notes.splice(index, 1);
         localStorage.setItem('notes', JSON.stringify(notes));
         loadNotes();
+        
+        if (deletedNote.reminder && socket && socket.connected) {
+            socket.emit('deleteReminder', { id: deletedNote.id });
+        }
     }
 }
 
 function initNotes() {
     const form = document.getElementById('note-form');
     const input = document.getElementById('note-input');
+    const checkbox = document.getElementById('enable-reminder-checkbox');
+    const reminderFields = document.getElementById('reminder-fields');
+    const reminderTime = document.getElementById('reminder-time');
+    
+    if (checkbox && reminderFields) {
+        checkbox.addEventListener('change', (e) => {
+            reminderFields.style.display = e.target.checked ? 'flex' : 'none';
+        });
+    }
+    
     if (form) {
         form.addEventListener('submit', (e) => {
             e.preventDefault();
             const text = input.value.trim();
-            if (text) {
-                addNote(text);
-                input.value = '';
+            if (!text) {
+                alert('Введите текст заметки');
+                return;
             }
+            
+            const isReminderEnabled = checkbox && checkbox.checked;
+            
+            if (isReminderEnabled && reminderTime && reminderTime.value) {
+                const reminderTimestamp = new Date(reminderTime.value).getTime();
+                const minTime = Date.now() + 10000;
+                if (reminderTimestamp <= minTime) {
+                    alert('Время напоминания должно быть хотя бы через 10 секунд от текущего момента');
+                    return;
+                }
+                addReminderNote(text, reminderTimestamp);
+                reminderTime.value = '';
+            } else {
+                addNote(text);
+            }
+            
+            input.value = '';
+            if (checkbox) checkbox.checked = false;
+            if (reminderFields) reminderFields.style.display = 'none';
         });
     }
+    
     loadNotes();
 }
 
@@ -228,6 +315,48 @@ if ('serviceWorker' in navigator) {
             }
         } catch (err) {
             console.error('Ошибка регистрации ServiceWorker:', err);
+        }
+    });
+}
+
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', (event) => {
+        const message = event.data;
+        console.log('Получено сообщение от SW:', message);
+        
+        if (message.type === 'SNOOZE_REMINDER') {
+            const reminderId = message.reminderId;
+            const reminderText = message.reminderText;
+            
+            const notes = JSON.parse(localStorage.getItem('notes') || '[]');
+            const noteIndex = notes.findIndex(note => note.id === reminderId);
+            
+            if (noteIndex !== -1) {
+                const oldTime = notes[noteIndex].reminder;
+                const newTime = Date.now() + (5 * 60 * 1000);
+                notes[noteIndex].reminder = newTime;
+                localStorage.setItem('notes', JSON.stringify(notes));
+                
+                console.log('Время напоминания обновлено:');
+                console.log('  Было: ' + new Date(oldTime).toLocaleString());
+                console.log('  Стало: ' + new Date(newTime).toLocaleString());
+                
+                if (currentPage === 'home') {
+                    loadNotes();
+                }
+                
+                showToast('Напоминание отложено на 5 минут. Новое время: ' + new Date(newTime).toLocaleString());
+                
+                if (socket && socket.connected) {
+                    socket.emit('rescheduleReminder', {
+                        id: reminderId,
+                        text: reminderText,
+                        reminderTime: newTime
+                    });
+                }
+            } else {
+                console.log('Заметка с id ' + reminderId + ' не найдена');
+            }
         }
     });
 }
